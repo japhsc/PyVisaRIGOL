@@ -45,7 +45,7 @@ class Instrument(object):
         self.inst.close()
     
     def query(self,message):
-        data = self.inst.query(message)[:-1]
+        #data = self.inst.query(message)[:-1]
         #ret = self.write(message)
         #if self.query_delay > 0.0:
         #    tme.sleep(self.query_delay)
@@ -54,6 +54,11 @@ class Instrument(object):
         #    err = self.inst.query('SYST:ERR?')
         #    print('QUERY: "%s" "%s"' % (message, err))
         #    print(':'.join(str(ord(x)) for x in data))
+        
+        self.write(message) #Request the data
+        rawdata = self.read_raw() #Read the block of data
+        data = rawdata[:rawdata.find(b'\n')].decode('utf-8')
+        #print(rawdata, data)
         return(data)
     
     def query_raw(self,message):
@@ -62,10 +67,13 @@ class Instrument(object):
         rawdata = self.read_raw() #Read the block of data
         head = rawdata[:11]
         rawdata = rawdata[11:-1] #Drop the heading
+        
+        print(head)
+        print(rawdata)
         return head,rawdata
     
     def read_raw(self):
-        return(self.inst.read_raw()) #Read the block ofprint data
+        return(self.inst.read_raw()) #Read the block of data
     
     def write(self,message):
         ret = self.inst.write(message)
@@ -109,7 +117,8 @@ def read(adr, channels=[1]):
         mem_depth = scope.query(':ACQuire:MDEPth?')
         sample_rate = scope.query(':ACQuire:SRATe?')
         #scope.write(':CHANnel'+str(channel)+':COUPling '+ch_cpl_mode)
-        scope.write(':SINGle') 
+        #scope.write(':SINGle')
+        scope.write(':STOP')
         
         trigger = 'WAIT'
         while trigger.find('STOP') < 0:
@@ -120,9 +129,6 @@ def read(adr, channels=[1]):
         timescale = float(scope.query(':TIM:SCAL?'))
         timeoffset = float(scope.query(':TIM:OFFS?'))
         print('timescale %.3f \t timeoffset %.3f' % (timescale, timeoffset))
-
-        
-
         
         #print(scope.query(':WAVeform:PREamble?'))
         scope.write(':WAVeform:FORMat BYTE')
@@ -133,9 +139,8 @@ def read(adr, channels=[1]):
         #scope.write(':STOP')
         rawdata = dict();
         for channel in channels:
-            scope.write(':WAV:SOUR CHAN'+str(channel))
-            
             cpl = scope.query(':CHANnel'+str(channel)+':COUPling?')
+            scope.write(':WAV:SOUR CHAN'+str(channel))
             
             #x_inc = float(scope.query(':WAVeform:XINCrement?'))
             #x_ref = float(scope.query(':WAVeform:XREFerence?'))
