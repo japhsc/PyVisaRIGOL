@@ -65,7 +65,7 @@ class Instrument(object):
         return head,rawdata
     
     def read_raw(self):
-        return(self.inst.read_raw()) #Read the block ofprint data
+        return(self.inst.read_raw()) #Read the block of data
     
     def write(self,message):
         ret = self.inst.write(message)
