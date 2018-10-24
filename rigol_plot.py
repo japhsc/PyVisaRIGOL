@@ -65,7 +65,7 @@ class Instrument(object):
         return head,rawdata
     
     def read_raw(self):
-        return(self.inst.read_raw()) #Read the block of data
+        return(self.inst.read_raw()) #Read block of data
     
     def write(self,message):
         ret = self.inst.write(message)
@@ -102,15 +102,16 @@ def read(adr, channels=[1]):
     with Instrument(rm, adr) as scope:
         #print(scope.query('*IDN?'))
         
-        scope.write(':SYSTem:LOCKed 1')
-        #scope.write(':RUN')
-        
+        # Lock keys
+        # scope.write(':SYSTem:LOCKed 1')
+
         #scope.write(':ACQuire:MDEPth 600000')
         mem_depth = scope.query(':ACQuire:MDEPth?')
         sample_rate = scope.query(':ACQuire:SRATe?')
         #scope.write(':CHANnel'+str(channel)+':COUPling '+ch_cpl_mode)
         scope.write(':SINGle') 
-        
+        # scope.write(':RUN')
+
         trigger = 'WAIT'
         while trigger.find('STOP') < 0:
             trigger = scope.query(":TRIGger:STATus?")
@@ -121,9 +122,6 @@ def read(adr, channels=[1]):
         timeoffset = float(scope.query(':TIM:OFFS?'))
         print('timescale %.3f \t timeoffset %.3f' % (timescale, timeoffset))
 
-        
-
-        
         #print(scope.query(':WAVeform:PREamble?'))
         scope.write(':WAVeform:FORMat BYTE')
         #scope.write(':WAVeform:MODE RAW')
@@ -131,8 +129,9 @@ def read(adr, channels=[1]):
         
         # Record data of a single trigger
         #scope.write(':STOP')
+        data = [];
         rawdata = dict();
-        for channel in channels:
+        for idc, channel in enumerate(channels):
             scope.write(':WAV:SOUR CHAN'+str(channel))
             
             cpl = scope.query(':CHANnel'+str(channel)+':COUPling?')
@@ -142,8 +141,10 @@ def read(adr, channels=[1]):
             #x_ori = float(scope.query(':WAVeform:XORigin?'))
             
             # Get voltage scale and offset
-            #voltscale = float(scope.query(':CHAN'+str(channel)+':SCAL?'))
-            #voltoffset = float(scope.query(':CHAN'+str(channel)+':OFFS?'))
+            voltscale = float(scope.query(':CHAN'+str(channel)+':SCAL?'))
+            voltoffset = float(scope.query(':CHAN'+str(channel)+':OFFS?'))
+            print('voltscale %.3f \t voltoffset %.3f' % (voltscale, voltoffset))
+
             y_inc = float(scope.query(':WAVeform:YINCrement?'))
             y_ref = float(scope.query(':WAVeform:YREFerence?'))
             y_ori = float(scope.query(':WAVeform:YORigin?'))
@@ -151,24 +152,17 @@ def read(adr, channels=[1]):
             
             _,rawdata['channel%d'%channel] = scope.query_raw(':WAV:DATA? CHAN'+str(channel))
             data_size = len(rawdata['channel%d'%channel])
+            data.append(numpy.frombuffer(rawdata['channel%d'%channel], 'B').astype(float))
+            data[-1] = (data[-1] - y_ori - y_ref) * y_inc
             print('CH%d(%s): data size: %d; sampl.rate: %s; Mem.depth: %s' % (channel,cpl,data_size,sample_rate,mem_depth))
-        #tme.sleep(0.4)
+
         scope.write(':RUN') # WHILE OPC??
-        # YANIS: MOVED TO 139 ## _,rawdata = scope.query_raw(':WAV:DATA? CHAN'+str(channel))
-        #tme.sleep(2.)
-        
-        
-        scope.write(':SYSTem:LOCKed 0')
-        
-    
-    data = numpy.zeros(shape = (len(channels), data_size));
-    for idc, channel in enumerate(channels):
-        data[idc] = numpy.frombuffer(rawdata['channel%d'%channel], 'B').astype(float)
-    data = (data - y_ori - y_ref) * y_inc
+        # Unlock keys
+        # scope.write(':SYSTem:LOCKed 0')
 
     # Generate a time axis
-    if len(data)>0.:
-        dt = timescale*12./float(len(data))
+    if len(data)>0:
+        dt = timescale*12./float(len(data[-1]))
     else:
         dt = 0.
     time = numpy.linspace(timeoffset - 6 * timescale, 
